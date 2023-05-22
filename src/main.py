@@ -21,7 +21,7 @@ def pep(session):
     if response is None:
         return
     soup = BeautifulSoup(response.text, features='lxml')
-    tables = soup.find_all('table', {'class': re.compile(r'pep.+')})
+    tables = soup.find(id='numerical-index')
     main_dict = {}
     result_dict = {'A': 0,
                    'D': 0,
@@ -31,21 +31,19 @@ def pep(session):
                    'S': 0,
                    'W': 0,
                    'Amount': 0}
-    for i in tables:
-        for j in i.tbody.find_all('tr'):
-            try:
-                if len(j.find('abbr').text) > 1:
-                    status = find_tag(j, 'abbr').text[-1]
-                else:
-                    status = None
-            except AttributeError:
-                status = None
-            link_pep = find_tag(j, 'a')['href']
-            main_dict[link_pep] = status
+    for line in tables.tbody.find_all('tr'):
+        if len(line.find('abbr').text) > 1:
+            status = find_tag(line, 'abbr').text[-1]
+        else:
+            status = None
+        link_pep = find_tag(line, 'a')['href']
+        main_dict[link_pep] = status
     for link in tqdm(main_dict):
         version_link = urljoin(MAIN_PEP_URL, link)
         response = requests.get(version_link)
         response.encoding = 'utf-8'
+        if response is None:
+            continue
         soup = BeautifulSoup(response.text, features='lxml')
         status_on_page = find_tag(soup, 'abbr').text[0]
         if main_dict[link] is not None:
