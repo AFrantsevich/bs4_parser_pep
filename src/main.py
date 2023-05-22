@@ -38,7 +38,7 @@ def pep(session):
                     status = find_tag(j, 'abbr').text[-1]
                 else:
                     status = None
-            except:
+            except AttributeError:
                 status = None
             link_pep = find_tag(j, 'a')['href']
             main_dict[link_pep] = status
@@ -46,18 +46,17 @@ def pep(session):
         version_link = urljoin(MAIN_PEP_URL, link)
         response = requests.get(version_link)
         response.encoding = 'utf-8'
-        if response is None:
-            continue
         soup = BeautifulSoup(response.text, features='lxml')
         status_on_page = find_tag(soup, 'abbr').text[0]
         if main_dict[link] is not None:
             if main_dict[link] == status_on_page:
                 result_dict[status_on_page] += 1
             else:
-                logging.info(f'Выявлено несоответвие статуса,'
-                             f'статус на главной странице - *{main_dict[link]}*,'
-                             f'статус на странице PEP - *{status_on_page}*,'
-                             f'PEP: {version_link}')
+                logging.info(
+                    f'Выявлено несоответвие статуса,'
+                    f'статус на главной странице - *{main_dict[link]}*,'
+                    f'статус на странице PEP - *{status_on_page}*,'
+                    f'PEP: {version_link}')
                 result_dict[status_on_page] += 1
         else:
             result_dict[status_on_page] += 1
@@ -75,7 +74,8 @@ def whats_new(session):
     soup = BeautifulSoup(response.text, features='lxml')
     main_div = find_tag(soup, 'section', attrs={'id': 'what-s-new-in-python'})
     div_with_ul = find_tag(main_div, 'div', attrs={'class': 'toctree-wrapper'})
-    sections_by_python = div_with_ul.find_all('li', attrs={'class': 'toctree-l1'})
+    sections_by_python = div_with_ul.find_all(
+        'li', attrs={'class': 'toctree-l1'})
     results = [('Ссылка на статью', 'Заголовок', 'Редактор, Автор')]
     for section in tqdm(sections_by_python):
         version_a_tag = find_tag(section, 'a')
@@ -134,7 +134,8 @@ def download(session):
     soup = BeautifulSoup(response.text, 'lxml')
     main_tag = find_tag(soup, 'div', {'role': 'main'})
     table_tag = find_tag(main_tag, 'table', {'class': 'docutils'})
-    pdf_a4_tag = find_tag(table_tag, 'a', {'href': re.compile(r'.+pdf-a4\.zip$')})
+    pdf_a4_tag = find_tag(
+        table_tag, 'a', {'href': re.compile(r'.+pdf-a4\.zip$')})
     pdf_a4_link = pdf_a4_tag['href']
     archive_url = urljoin(downloads_url, pdf_a4_link)
     filename = archive_url.split('/')[-1]
