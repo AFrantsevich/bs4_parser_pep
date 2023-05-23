@@ -11,61 +11,48 @@ from urllib.parse import urljoin
 
 from outputs import control_output
 from utils import get_response, find_tag
-from constants import BASE_DIR, MAIN_DOC_URL, MAIN_PEP_URL
+from constants import BASE_DIR, MAIN_DOC_URL, MAIN_PEP_URL, EXPECTED_STATUS
 from configs import configure_argument_parser, configure_logging
 
 
 def pep(session):
-    response = session.get(MAIN_PEP_URL)
-    response.encoding = 'utf-8'
+    response = get_response(session, MAIN_PEP_URL)
     if response is None:
         return
     soup = BeautifulSoup(response.text, features='lxml')
-    tables = soup.find(id='numerical-index')
-    main_dict = {}
-    result_dict = {'A': 0,
-                   'D': 0,
-                   'F': 0,
-                   'P': 0,
-                   'R': 0,
-                   'S': 0,
-                   'W': 0,
-                   'Amount': 0}
-    for line in tables.tbody.find_all('tr'):
-        if len(line.find('abbr').text) > 1:
-            status = find_tag(line, 'abbr').text[-1]
-        else:
-            status = None
+    tables = find_tag(soup, 'section', attrs={'id': 'numerical-index'})
+    result = {}
+    for line in tqdm(tables.tbody.find_all('tr')):
         link_pep = find_tag(line, 'a')['href']
-        main_dict[link_pep] = status
-    for link in tqdm(main_dict):
-        version_link = urljoin(MAIN_PEP_URL, link)
-        response = requests.get(version_link)
-        response.encoding = 'utf-8'
+        version_link = urljoin(MAIN_PEP_URL, link_pep)
+        response = get_response(requests, version_link)
         if response is None:
-            continue
+            return
         soup = BeautifulSoup(response.text, features='lxml')
-        status_on_page = find_tag(soup, 'abbr').text[0]
-        if main_dict[link] is not None:
-            if main_dict[link] == status_on_page:
-                result_dict[status_on_page] += 1
-            else:
-                logging.info(
-                    f'Выявлено несоответвие статуса,'
-                    f'статус на главной странице - *{main_dict[link]}*,'
-                    f'статус на странице PEP - *{status_on_page}*,'
-                    f'PEP: {version_link}')
-                result_dict[status_on_page] += 1
+        status_on_page = find_tag(soup, 'abbr').text
+        status_main = find_tag(line, 'abbr').text
+        if len(status_main) > 1:
+            status_main = status_main[-1]
         else:
-            result_dict[status_on_page] += 1
-    result_dict['Amount'] += sum(result_dict.values())
-    return [data for data in result_dict.items()]
+            status_main = ''
+
+        if status_on_page not in result:
+            result[status_on_page] = 0
+        if status_on_page in EXPECTED_STATUS[status_main]:
+            result[status_on_page] += 1
+        else:
+            result[status_on_page] += 1
+            logging.info(
+                f'Выявлено несоответвие статуса,'
+                f'статус на главной странице - *{status_main}*,'
+                f'статус на странице PEP - *{status_on_page}*,'
+                f'PEP: {version_link}')
+    result['Total'] = sum(result.values())
+    return [data for data in result.items()]
 
 
 def whats_new(session):
     whats_new_url = urljoin(MAIN_DOC_URL, 'whatsnew/')
-    response = session.get(whats_new_url)
-    response.encoding = 'utf-8'
     response = get_response(session, whats_new_url)
     if response is None:
         return
@@ -79,8 +66,7 @@ def whats_new(session):
         version_a_tag = find_tag(section, 'a')
         href = version_a_tag['href']
         version_link = urljoin(whats_new_url, href)
-        response = requests.get(version_link)
-        response.encoding = 'utf-8'
+        response = get_response(requests, version_link)
         if response is None:
             continue
         soup = BeautifulSoup(response.text, features='lxml')
@@ -92,8 +78,6 @@ def whats_new(session):
 
 
 def latest_versions(session):
-    response = session.get(MAIN_DOC_URL)
-    response.encoding = 'utf-8'
     response = get_response(session, MAIN_DOC_URL)
     if response is None:
         return
@@ -124,8 +108,6 @@ def latest_versions(session):
 
 def download(session):
     downloads_url = urljoin(MAIN_DOC_URL, 'download.html')
-    response = session.get(downloads_url)
-    response.encoding = 'utf-8'
     response = get_response(session, downloads_url)
     if response is None:
         return
@@ -140,7 +122,9 @@ def download(session):
     downloads_dir = BASE_DIR / 'downloads'
     downloads_dir.mkdir(exist_ok=True)
     archive_path = downloads_dir / filename
-    response = requests.get(archive_url)
+    response = get_response(requests, archive_url)
+    if response is None:
+        return
     with open(archive_path, 'wb') as file:
         file.write(response.content)
     logging.info(f'Архив был загружен и сохранён: {archive_path}')
