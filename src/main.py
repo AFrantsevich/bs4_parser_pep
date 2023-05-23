@@ -22,6 +22,7 @@ def pep(session):
     soup = BeautifulSoup(response.text, features='lxml')
     tables = find_tag(soup, 'section', attrs={'id': 'numerical-index'})
     result = {}
+    unknown_status = []
     for line in tqdm(tables.tbody.find_all('tr')):
         link_pep = find_tag(line, 'a')['href']
         version_link = urljoin(MAIN_PEP_URL, link_pep)
@@ -38,15 +39,16 @@ def pep(session):
 
         if status_on_page not in result:
             result[status_on_page] = 0
-        if status_on_page in EXPECTED_STATUS[status_main]:
-            result[status_on_page] += 1
-        else:
-            result[status_on_page] += 1
-            logging.info(
-                f'Выявлено несоответвие статуса,'
-                f'статус на главной странице - *{status_main}*,'
-                f'статус на странице PEP - *{status_on_page}*,'
-                f'PEP: {version_link}')
+        result[status_on_page] += 1
+        if status_on_page not in EXPECTED_STATUS[status_main]:
+            unknown_status.append((status_main, status_on_page, version_link))
+    for status in unknown_status:
+        status_main, status_on_page, version_link = status
+        logging.info(
+            f'Выявлено несоответствие статуса,'
+            f'статус на главной странице - *{status_main}*,'
+            f'статус на странице PEP - *{status_on_page}*,'
+            f'PEP: {version_link}')
     result['Total'] = sum(result.values())
     return [data for data in result.items()]
 
